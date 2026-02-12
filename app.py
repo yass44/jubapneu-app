@@ -73,9 +73,8 @@ def get_facture_lines(facture_id):
 # --- PDF ---
 def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date_obj=None):
     buffer = io.BytesIO(); c = canvas.Canvas(buffer, pagesize=A4); width, height = A4
-    # On s'assure d'avoir une string pour l'affichage PDF
     if not date_obj: date_str = datetime.now().strftime('%d/%m/%Y')
-    elif isinstance(date_obj, str): date_str = date_obj # Si déjà string
+    elif isinstance(date_obj, str): date_str = date_obj 
     else: date_str = date_obj.strftime('%d/%m/%Y')
 
     c.setFont("Helvetica-Bold", 16); c.drawString(50, height-50, "JUBAPNEU")
@@ -132,7 +131,7 @@ elif tiroir == "📊 STATISTIQUES": page = st.sidebar.radio("Nav", ["Chiffre d'A
 # STOCK
 # =========================================================
 if page == "Stock Actuel":
-    st.title("📦 Stock"); 
+    st.title("📦 Stock")
     if not df_stock.empty:
         df_view = df_stock[df_stock['stock_actuel'] > 0].copy()
         c1, c2 = st.columns([2,1]); search = c1.text_input("🔍", placeholder="Recherche..."); saisons = c2.multiselect("Saison", df_view['saison'].unique())
@@ -160,7 +159,6 @@ elif page == "📥 Importer Facture Fournisseur":
                 bar = st.progress(0)
                 for i, it in enumerate(found):
                     inf = it['_inf']; q = it['Qté']; p = it['Prix']
-                    # ICI : On laisse Supabase gérer la date ou on envoie ISOFORMAT
                     now_iso = datetime.now().isoformat()
                     
                     res = supabase.table('articles').select("*").eq('dimension_complete', inf['dimension_complete']).eq('marque', inf['marque']).execute()
@@ -172,7 +170,6 @@ elif page == "📥 Importer Facture Fournisseur":
                         new = {'dimension_complete': inf['dimension_complete'], 'largeur': inf['largeur'], 'hauteur': inf['hauteur'], 'diametre': inf['diametre'], 'charge': inf['charge'], 'vitesse': inf['vitesse'], 'marque': inf['marque'], 'saison': inf['saison'], 'stock_actuel': q, 'pmp_achat': p}
                         aid = supabase.table('articles').insert(new).execute().data[0]['id']
                     
-                    # CORRECTION : Date format ISO
                     supabase.table('mouvements_stock').insert({'article_id': aid, 'type_mouvement': 'ACHAT', 'quantite': q, 'prix_achat_unitaire': p, 'lien_facture_fournisseur': f.name, 'created_at': now_iso}).execute()
                     bar.progress((i+1)/len(found))
                 st.success("Importé !"); st.cache_resource.clear(); time.sleep(2); st.rerun()
@@ -181,7 +178,6 @@ elif page == "📥 Importer Facture Fournisseur":
 elif page == "Historique Mouvements":
     st.title("📜 Historique")
     if not df_hist.empty:
-        # NETTOYAGE DÉFINITIF : On force la conversion en datetime propre
         df_hist['created_at'] = pd.to_datetime(df_hist['created_at'], errors='coerce')
         st.dataframe(df_hist.dropna(subset=['created_at']).sort_values('created_at', ascending=False), use_container_width=True)
 
@@ -189,10 +185,7 @@ elif page == "Historique Mouvements":
 # FACTURATION
 # =========================================================
 elif page == "Nouvelle Facture":
-    st.title("⚡ Facture"); 
-
-[Image of point of sale system]
-
+    st.title("⚡ Facture")
     if st.session_state.facture_reussie:
         s = st.session_state.facture_reussie; st.balloons(); st.success(f"Facture {s['num']} OK !")
         c1,c2,c3 = st.columns(3)
@@ -239,7 +232,6 @@ elif page == "Nouvelle Facture":
                         if it['type']=="PNEU":
                             cur=supabase.table('articles').select('stock_actuel').eq('id',it['id']).execute().data[0]['stock_actuel']
                             supabase.table('articles').update({'stock_actuel':cur-it['qte']}).eq('id',it['id']).execute()
-                            # CORRECTION DATE ISO
                             supabase.table('mouvements_stock').insert({"article_id":it['id'], "type_mouvement":"VENTE", "quantite":-it['qte'], "lien_facture_fournisseur":f"Vente {num}", "created_at":datetime.now().isoformat()}).execute()
                     pdf=generer_pdf(fid, cli, st.session_state.panier, tot, num); st.session_state.facture_reussie={"num":num, "pdf":pdf, "client":cli['nom']}; st.rerun()
             if st.button("🗑️ Vider"): st.session_state.panier=[]; st.rerun()
@@ -247,7 +239,6 @@ elif page == "Nouvelle Facture":
 elif page == "Mes Factures":
     st.title("📂 Factures")
     if not df_factures.empty:
-        # NETTOYAGE DATE
         df_factures['created_at'] = pd.to_datetime(df_factures['created_at'], errors='coerce')
         dfd=df_factures.copy(); dfd['Date']=dfd['created_at'].dt.strftime('%d/%m/%Y'); dfd['Client']=dfd['clients'].apply(lambda x:x['nom'] if x else '?')
         st.dataframe(dfd[['numero_facture','Date','Client','total_ttc']], use_container_width=True)
@@ -255,7 +246,6 @@ elif page == "Mes Factures":
         if st.button("PDF"):
             r=df_factures[df_factures['numero_facture']==sel].iloc[0]
             ls=[{"desc":f"Pneu {l['articles']['marque']} {l['articles']['dimension_complete']}" if l['articles'] else "Svc", "qte":l['quantite'], "prix":l['prix_vente_unitaire']} for l in get_facture_lines(r['id'])]
-            # On passe l'objet datetime directement
             st.download_button("Télécharger", generer_pdf(r['id'], r['clients'], ls, r['total_ttc'], r['numero_facture'], r['created_at']), f"Facture_{sel}.pdf", "application/pdf")
 
 elif page == "Clients":
@@ -284,17 +274,14 @@ elif page == "Gestion Services":
 elif page == "Chiffre d'Affaires":
     st.title("📈 CA")
     if not df_factures.empty:
-        # NETTOYAGE DATE
         df_factures['created_at'] = pd.to_datetime(df_factures['created_at'], errors='coerce')
         mode=st.radio("Vue",["Jour","Semaine","Mois"], horizontal=True); r='D' if mode=="Jour" else 'W' if mode=="Semaine" else 'M'
         ch=df_factures.resample(r, on='created_at')['total_ttc'].sum().reset_index()
         st.plotly_chart(px.bar(ch, x='created_at', y='total_ttc', title=f"CA ({mode})"), use_container_width=True)
+        st.metric("Total", f"{df_factures['total_ttc'].sum():.2f} €")
 
 elif page == "Top Ventes":
-    st.title("🏆 Top"); 
-
-[Image of sales graph report]
-
+    st.title("🏆 Top")
     res=supabase.table('factures_lignes').select('*, articles(*)').execute(); dfl=pd.DataFrame(res.data)
     if not dfl.empty:
         dfl['Dim']=dfl.apply(lambda x:x['articles']['dimension_complete'] if x['articles'] else None, axis=1)
