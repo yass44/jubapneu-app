@@ -6,9 +6,15 @@ from datetime import datetime
 import io
 import re
 import pdfplumber
+import os
+import time
+
+# Imports pour le PDF Pro
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import time
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib import colors
+from textwrap import wrap
 
 # --- CONFIGURATION PAGE ---
 st.set_page_config(page_title="JubaPneu ERP", layout="wide", page_icon="🛞")
@@ -70,8 +76,9 @@ def load_all_data():
 def get_facture_lines(facture_id):
     return supabase.table('factures_lignes').select('*, articles(*)').eq('facture_id', facture_id).execute().data
 
-# --- GENERATEUR PDF ---
+# --- GÉNÉRATEUR PDF (PRO) ---
 def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date_obj=None):
+    import os # IMPORT DE SÉCURITÉ PLACÉ ICI
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -387,5 +394,3 @@ elif page == "Top Ventes":
 elif page == "Valeur Stock":
     st.title("💰 Stock Value")
     st.metric("Total", f"{(df_stock['stock_actuel']*df_stock['pmp_achat'].fillna(0)).sum():,.2f} €")
-
-
