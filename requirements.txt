@@ -4,3 +4,4 @@ plotly
 supabase
 reportlab
 pdfplumber
+Pillow
