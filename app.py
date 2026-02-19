@@ -78,7 +78,7 @@ def get_facture_lines(facture_id):
 
 # --- GÉNÉRATEUR PDF (PRO) ---
 def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date_obj=None):
-    import os # IMPORT DE SÉCURITÉ PLACÉ ICI
+    import os
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -89,13 +89,12 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
     else: date_str = date_obj.strftime('%d/%m/%Y')
 
     # --- 1. EN-TÊTE GAUCHE (Logo & Entreprise) ---
-   import os
     dossier_actuel = os.path.dirname(os.path.abspath(__file__))
     chemin_logo = os.path.join(dossier_actuel, "logo.png")
 
     if os.path.exists(chemin_logo):
         try:
-            # CORRECTION ICI : Ajout de height=60 pour que l'image apparaisse !
+            # L'image a maintenant une hauteur définie pour être visible
             c.drawImage(chemin_logo, 50, height - 110, width=140, height=60, preserveAspectRatio=True, mask='auto')
         except Exception as e:
             c.setFont("Helvetica-Bold", 20)
@@ -401,5 +400,3 @@ elif page == "Top Ventes":
 elif page == "Valeur Stock":
     st.title("💰 Stock Value")
     st.metric("Total", f"{(df_stock['stock_actuel']*df_stock['pmp_achat'].fillna(0)).sum():,.2f} €")
-
-
