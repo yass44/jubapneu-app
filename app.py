@@ -89,18 +89,17 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
     else: date_str = date_obj.strftime('%d/%m/%Y')
 
     # --- 1. EN-TÊTE GAUCHE (Logo & Entreprise) ---
+   import os
     dossier_actuel = os.path.dirname(os.path.abspath(__file__))
     chemin_logo = os.path.join(dossier_actuel, "logo.png")
 
     if os.path.exists(chemin_logo):
         try:
-            c.drawImage(chemin_logo, 50, height - 100, width=120, preserveAspectRatio=True, mask='auto')
+            # CORRECTION ICI : Ajout de height=60 pour que l'image apparaisse !
+            c.drawImage(chemin_logo, 50, height - 110, width=140, height=60, preserveAspectRatio=True, mask='auto')
         except Exception as e:
-            # S'il y a une erreur (ex: Pillow manquant), on l'écrit en petit pour déboguer
             c.setFont("Helvetica-Bold", 20)
             c.drawString(50, height - 50, "JUBAPNEU")
-            c.setFont("Helvetica", 6)
-            c.drawString(50, height - 60, f"Err logo: {str(e)[:50]}")
     else:
         c.setFont("Helvetica-Bold", 20)
         c.drawString(50, height - 50, "JUBAPNEU")
@@ -402,4 +401,5 @@ elif page == "Top Ventes":
 elif page == "Valeur Stock":
     st.title("💰 Stock Value")
     st.metric("Total", f"{(df_stock['stock_actuel']*df_stock['pmp_achat'].fillna(0)).sum():,.2f} €")
+
 
