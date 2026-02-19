@@ -72,11 +72,6 @@ def get_facture_lines(facture_id):
 
 # --- GENERATEUR PDF ---
 def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date_obj=None):
-    import os
-    from reportlab.platypus import Table, TableStyle
-    from reportlab.lib import colors
-    from textwrap import wrap
-
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -96,7 +91,6 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
         c.drawString(50, height - 50, "JUBAPNEU")
 
     c.setFont("Helvetica", 10)
-    # On descend un peu le texte pour laisser la place au logo
     y_info = height - 120 
     c.drawString(50, y_info, "10 Place Jeanne d'Arc - 54310 Homécourt")
     c.drawString(50, y_info - 15, "Tel: 09 54 45 98 22")
@@ -111,7 +105,7 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
     c.drawRightString(width - 50, height - 90, f"Le {date_str}")
     
     # --- 3. BLOC CLIENT ---
-    c.roundRect(width - 250, height - 200, 200, 75, 5) # Rectangle avec bords arrondis
+    c.roundRect(width - 250, height - 200, 200, 75, 5)
     c.setFont("Helvetica-Bold", 11)
     c.drawString(width - 240, height - 145, f"Client : {client_dict.get('nom', 'Inconnu')}")
     c.setFont("Helvetica", 10)
@@ -120,7 +114,6 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
         c.drawString(width - 240, height - 175, f"{client_dict.get('code_postal', '')} {client_dict.get('ville', '')}")
     
     # --- 4. TABLEAU DES LIGNES ---
-    # En-têtes du tableau
     data = [["Désignation", "Qté", "TVA", "Montant HT", "Montant TTC"]]
     
     total_ht = 0
@@ -131,7 +124,6 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
         qte = l.get('qte') or l.get('quantite')
         prix_ttc_unit = l.get('prix') or l.get('prix_vente_unitaire')
         
-        # Calculs financiers (TVA à 20%)
         prix_ttc_total = qte * prix_ttc_unit
         prix_ht_total = prix_ttc_total / 1.20
         tva_total = prix_ttc_total - prix_ht_total
@@ -139,7 +131,6 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
         total_ht += prix_ht_total
         total_tva += tva_total
         
-        # Coupe le texte s'il est trop long pour ne pas casser le tableau
         desc_wrapped = "\n".join(wrap(desc, 45)) 
         
         data.append([
@@ -150,21 +141,19 @@ def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date
             f"{prix_ttc_total:.2f} €"
         ])
         
-    # Création et stylisation du tableau (comme sur ton modèle)
     table = Table(data, colWidths=[230, 40, 40, 80, 80])
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f2f2f2")), # Fond gris clair pour l'en-tête
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f2f2f2")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.black),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('ALIGN', (0,1), (0,-1), 'LEFT'),   # Description alignée à gauche
-        ('ALIGN', (3,1), (-1,-1), 'RIGHT'), # Prix alignés à droite
+        ('ALIGN', (0,1), (0,-1), 'LEFT'),   
+        ('ALIGN', (3,1), (-1,-1), 'RIGHT'), 
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0,0), (-1,0), 8),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey) # Quadrillage
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey)
     ]))
     
-    # Dessin du tableau sur la page
     table.wrapOn(c, width, height)
     w, h = table.wrap(0, 0)
     y_pos = height - 240 - h
@@ -398,4 +387,5 @@ elif page == "Top Ventes":
 elif page == "Valeur Stock":
     st.title("💰 Stock Value")
     st.metric("Total", f"{(df_stock['stock_actuel']*df_stock['pmp_achat'].fillna(0)).sum():,.2f} €")
+
 
