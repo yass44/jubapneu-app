@@ -70,29 +70,137 @@ def load_all_data():
 def get_facture_lines(facture_id):
     return supabase.table('factures_lignes').select('*, articles(*)').eq('facture_id', facture_id).execute().data
 
-# --- PDF ---
+# --- GENERATEUR PDF ---
 def generer_pdf(facture_id, client_dict, lignes, total_ttc, numero_facture, date_obj=None):
-    buffer = io.BytesIO(); c = canvas.Canvas(buffer, pagesize=A4); width, height = A4
+    import os
+    from reportlab.platypus import Table, TableStyle
+    from reportlab.lib import colors
+    from textwrap import wrap
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    
+    # Gestion de la date
     if not date_obj: date_str = datetime.now().strftime('%d/%m/%Y')
     elif isinstance(date_obj, str): date_str = date_obj 
     else: date_str = date_obj.strftime('%d/%m/%Y')
 
-    c.setFont("Helvetica-Bold", 16); c.drawString(50, height-50, "JUBAPNEU")
-    c.setFont("Helvetica", 10); c.drawString(50, height-70, "123 Route du Garage, 57000 METZ"); c.drawString(50, height-85, "SIRET: 123 456 789 00012")
-    c.setFont("Helvetica-Bold", 14); c.drawRightString(width-50, height-50, "FACTURE")
-    c.setFont("Helvetica", 12); c.drawRightString(width-50, height-70, f"N° {numero_facture}")
-    c.drawString(width-150, height-90, f"Date : {date_str}")
-    c.rect(300, height-200, 250, 80)
-    c.setFont("Helvetica-Bold", 12); c.drawString(310, height-135, f"Client : {client_dict.get('nom', 'Inconnu')}")
+    # --- 1. EN-TÊTE GAUCHE (Logo & Entreprise) ---
+    if os.path.exists("logo.png"):
+        c.drawImage("logo.png", 50, height - 100, width=120, preserveAspectRatio=True, mask='auto')
+    elif os.path.exists("logo.jpg"):
+        c.drawImage("logo.jpg", 50, height - 100, width=120, preserveAspectRatio=True, mask='auto')
+    else:
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(50, height - 50, "JUBAPNEU")
+
     c.setFont("Helvetica", 10)
-    if client_dict.get('adresse'): c.drawString(310, height-150, f"{client_dict['adresse']} {client_dict.get('ville','')}")
-    if client_dict.get('siret'): c.drawString(310, height-185, f"SIRET: {client_dict['siret']}")
-    y = height - 250; c.line(50, y, width-50, y); c.drawString(50, y+5, "Description"); c.drawString(350, y+5, "Qté"); c.drawString(400, y+5, "P.U."); c.drawString(500, y+5, "Total"); y -= 20
+    # On descend un peu le texte pour laisser la place au logo
+    y_info = height - 120 
+    c.drawString(50, y_info, "10 Place Jeanne d'Arc - 54310 Homécourt")
+    c.drawString(50, y_info - 15, "Tel: 09 54 45 98 22")
+    c.drawString(50, y_info - 30, "Email: contact@jubapneu.eu | Web: jubapneu.eu")
+    
+    # --- 2. EN-TÊTE DROITE (Numéro Facture) ---
+    c.setFont("Helvetica-Bold", 16)
+    c.drawRightString(width - 50, height - 50, "FACTURE")
+    c.setFont("Helvetica", 12)
+    c.drawRightString(width - 50, height - 70, f"N° {numero_facture}")
+    c.setFont("Helvetica", 10)
+    c.drawRightString(width - 50, height - 90, f"Le {date_str}")
+    
+    # --- 3. BLOC CLIENT ---
+    c.roundRect(width - 250, height - 200, 200, 75, 5) # Rectangle avec bords arrondis
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(width - 240, height - 145, f"Client : {client_dict.get('nom', 'Inconnu')}")
+    c.setFont("Helvetica", 10)
+    if client_dict.get('adresse'): 
+        c.drawString(width - 240, height - 160, f"{client_dict['adresse']}")
+        c.drawString(width - 240, height - 175, f"{client_dict.get('code_postal', '')} {client_dict.get('ville', '')}")
+    
+    # --- 4. TABLEAU DES LIGNES ---
+    # En-têtes du tableau
+    data = [["Désignation", "Qté", "TVA", "Montant HT", "Montant TTC"]]
+    
+    total_ht = 0
+    total_tva = 0
+    
     for l in lignes:
         desc = l.get('desc') or (f"Pneu {l['articles']['marque']} {l['articles']['dimension_complete']}" if l.get('articles') else "Service")
-        qte = l.get('qte') or l.get('quantite'); prix = l.get('prix') or l.get('prix_vente_unitaire')
-        c.drawString(50, y, str(desc)[:60]); c.drawString(350, y, str(qte)); c.drawString(400, y, f"{prix:.2f}"); c.drawString(500, y, f"{qte*prix:.2f}"); y -= 20
-    c.line(50, y, width-50, y); c.setFont("Helvetica-Bold", 12); c.drawRightString(width-50, y-30, f"TOTAL : {total_ttc:.2f} €"); c.showPage(); c.save(); buffer.seek(0)
+        qte = l.get('qte') or l.get('quantite')
+        prix_ttc_unit = l.get('prix') or l.get('prix_vente_unitaire')
+        
+        # Calculs financiers (TVA à 20%)
+        prix_ttc_total = qte * prix_ttc_unit
+        prix_ht_total = prix_ttc_total / 1.20
+        tva_total = prix_ttc_total - prix_ht_total
+        
+        total_ht += prix_ht_total
+        total_tva += tva_total
+        
+        # Coupe le texte s'il est trop long pour ne pas casser le tableau
+        desc_wrapped = "\n".join(wrap(desc, 45)) 
+        
+        data.append([
+            desc_wrapped, 
+            str(qte), 
+            "20%", 
+            f"{prix_ht_total:.2f} €", 
+            f"{prix_ttc_total:.2f} €"
+        ])
+        
+    # Création et stylisation du tableau (comme sur ton modèle)
+    table = Table(data, colWidths=[230, 40, 40, 80, 80])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f2f2f2")), # Fond gris clair pour l'en-tête
+        ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (0,1), (0,-1), 'LEFT'),   # Description alignée à gauche
+        ('ALIGN', (3,1), (-1,-1), 'RIGHT'), # Prix alignés à droite
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey) # Quadrillage
+    ]))
+    
+    # Dessin du tableau sur la page
+    table.wrapOn(c, width, height)
+    w, h = table.wrap(0, 0)
+    y_pos = height - 240 - h
+    table.drawOn(c, 50, y_pos)
+    
+    # --- 5. TOTAUX ---
+    y_tot = y_pos - 30
+    c.setFont("Helvetica-Bold", 10)
+    c.drawRightString(width - 140, y_tot, "Total HT :")
+    c.drawRightString(width - 50, y_tot, f"{total_ht:.2f} €")
+    
+    y_tot -= 15
+    c.setFont("Helvetica", 10)
+    c.drawRightString(width - 140, y_tot, "TVA (20%) :")
+    c.drawRightString(width - 50, y_tot, f"{total_tva:.2f} €")
+    
+    y_tot -= 20
+    c.setFont("Helvetica-Bold", 12)
+    c.drawRightString(width - 140, y_tot, "Total TTC :")
+    c.drawRightString(width - 50, y_tot, f"{total_ttc:.2f} €")
+    
+    # --- 6. CONDITIONS DE PAIEMENT ---
+    c.setFont("Helvetica", 9)
+    c.drawString(50, y_tot, "Conditions de paiement :")
+    c.drawString(50, y_tot - 15, f"• 100,00% soit {total_ttc:.2f} € à payer comptant.")
+    
+    # --- 7. PIED DE PAGE LÉGAL ---
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.dimgrey)
+    c.drawCentredString(width / 2, 40, "SARL - Société à Responsabilité Limitée JubaPneu au capital social de 10 000€")
+    c.drawCentredString(width / 2, 30, "Siège social: 10 Place Jeanne d'Arc-54310 Homécourt")
+    c.drawCentredString(width / 2, 20, "Siret: 92063340100012 | Numéro TVA Intracommunautaire: FR09920633401")
+    
+    c.showPage()
+    c.save()
+    buffer.seek(0)
     return buffer
 
 # --- ANALYSE PDF ---
@@ -290,3 +398,4 @@ elif page == "Top Ventes":
 elif page == "Valeur Stock":
     st.title("💰 Stock Value")
     st.metric("Total", f"{(df_stock['stock_actuel']*df_stock['pmp_achat'].fillna(0)).sum():,.2f} €")
+
